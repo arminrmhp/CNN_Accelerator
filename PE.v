@@ -12,6 +12,10 @@ module PE (
 	input_en,
 	output_en
 );
+	
+input sel_pol; // Polarity of select. For PE0, sel reads from regA2 at cycle1 and regA1 at cycle2
+				// For PE1, sel reads from regA1 at cycle1 and regA2 at cycle2
+				// sel_pol is 0 for PE0 initially, and 1 for PE1
 
 //define regs and in/outs here
 parameter SIZE;
@@ -21,8 +25,42 @@ wire [SIZE] C_inter;
 wire [SIZE] add_out;
 wire [SIZE] memC_out;
 wire [SIZE] fifoC_in;
+	
+reg M1_sel;
+reg A_out;
 
 //control logic (local FSM)
+	
+always @ (posedge clk or posedge rst)
+	begin: FSM
+	if (rst) begin
+		//reset everyting
+	end else
+		case (state)
+		/*
+			At read0 state, based on sel_pol, correct register value will be read 
+				depending on which PE are are at
+			Then the state changes to read1
+			At read1, the other register value is read
+			The if statement distinguishes between PEs
+			Idle state TBD
+			
+			Since we have 2 entries per register, only 2 states are needed
+		*/
+			IDLE: //idle state whatever it is
+			READ0: 	if (!sel_pol) 
+						A_out <= RA_out1;
+					else 
+						A_out <= RA_out2;
+					state <= READ1;
+			READ1:	if (sel_pol)
+						A_out <= RA_out1;
+					else
+						A_out <= RA_out;
+					state <= READ0;
+			default: state <= IDLE;
+		endcase
+	end
 
 	always @ (posedge clk or posedge rst) begin
 		if (rst) begin
@@ -64,13 +102,24 @@ wire [SIZE] fifoC_in;
 	//.empty ()
 	);
 		
-	Register RA (
+	Register RA1 (
 	.clk (clk),
 	.rst (rst),
 	.data_in (input_A),
 	//.addr_in (),
 	.in_enable (input_en),
-	.data_out (RA_out),
+	.data_out (RA_out1),
+	//.addr_out,
+	//.out_enable
+	);
+	
+	Register RA2 (
+	.clk (clk),
+	.rst (rst),
+	.data_in (RA_out1),
+	//.addr_in (),
+	.in_enable (input_en),
+	.data_out (RA_out2),
 	//.addr_out,
 	//.out_enable
 	);	
